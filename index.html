@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Registro de Nota Fiscal</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            padding: 10px;
+            background-color: #f5f5f5;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+
+        th {
+            background-color: #3498db;
+            color: white;
+        }
+
+        tr:nth-child(even) {
+            background-color: #f2f2f2;
+        }
+
+        .input-fields {
+            margin-top: 20px;
+        }
+
+        .input-fields input {
+            margin: 5px 0;
+            padding: 8px;
+            width: calc(50% - 12px);
+        }
+
+        .input-fields button {
+            padding: 8px 12px;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Registro de Nota Fiscal</h1>
+
+<label for="fileUpload">Carregar Planilha Excel:</label>
+<input type="file" id="fileUpload" accept=".xlsx, .xls" />
+<button onclick="handleFileUpload()">Carregar</button>
+
+<br><br>
+
+<label for="nfInput">Número da Nota Fiscal:</label>
+<input type="text" id="nfInput" placeholder="Digite o número da NF">
+<button onclick="fetchNFData()">Buscar</button>
+<button onclick="showAllNFs()">Mostrar Todas</button>
+
+<div class="input-fields">
+    <h2>Preencher ou Editar Dados da Nota Fiscal</h2>
+    <input type="text" id="dataInput" placeholder="Data">
+    <input type="text" id="produtoInput" placeholder="Produto">
+    <input type="text" id="observacaoInput" placeholder="Observação">
+    
+    <!-- Usando selects para "De" e "Para" -->
+    <select id="deSelect"><option value="">Selecione o valor de "De"</option></select>
+    <select id="paraSelect"><option value="">Selecione o valor de "Para"</option></select>
+    
+    <label>
+        <input type="checkbox" id="recebidoInput"> Recebido
+    </label>
+    <button onclick="saveNFData()">Salvar Dados</button>
+</div>
+
+<table>
+    <thead>
+        <tr>
+            <th>Data</th>
+            <th>NF</th>
+            <th>Produto</th>
+            <th>Observação</th>
+            <th>De</th>
+            <th>Para</th>
+            <th>Status</th>
+        </tr>
+    </thead>
+    <tbody id="nfTableBody">
+        <!-- Os dados serão preenchidos aqui -->
+    </tbody>
+</table>
+
+<script>
+    let nfDatabase = {}; // Objeto para armazenar as notas fiscais
+    let deOptions = new Set(); // Para armazenar opções únicas de "De"
+    let paraOptions = new Set(); // Para armazenar opções únicas de "Para"
+    let workbook; // Para armazenar a referência do workbook
+
+    function handleFileUpload() {
+        const fileInput = document.getElementById('fileUpload');
+        const file = fileInput.files[0];
+
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const data = new Uint8Array(e.target.result);
+                workbook = XLSX.read(data, { type: 'array' });
+                const firstSheetName = workbook.SheetNames[0];
+                const worksheet = workbook.Sheets[firstSheetName];
+                const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+                processExcelData(jsonData);
+            };
+            reader.readAsArrayBuffer(file);
+        } else {
+            alert('Por favor, selecione um arquivo Excel.');
+        }
+    }
+
+    function processExcelData(data) {
+        if (!data || data.length === 0) return;
+
+        const headers = data[0];
+        data.slice(1).forEach(row => {
+            const nfNumber = row[1]; 
+            nfDatabase[nfNumber] = {
+                data: row[0],
+                produto: row[2],
+                observacao: row[3],
+                de: row[4],
+                para: row[5],
+                recebido: row[6] === 'Recebido'
+            };
+            
+            // Adiciona valores únicos para os selects "De" e "Para"
+            deOptions.add(row[4]);
+            paraOptions.add(row[5]);
+        });
+
+        updateSelectOptions('deSelect', deOptions);
+        updateSelectOptions('paraSelect', paraOptions);
+        
+        alert('Dados carregados com sucesso!');
+    }
+
+    function updateSelectOptions(selectId, options) {
+        const selectElement = document.getElementById(selectId);
+        selectElement.innerHTML = '<option value="">Selecione</option>';
+        options.forEach(option => {
+            const optionElement = document.createElement('option');
+            optionElement.value = option;
+            optionElement.textContent = option;
+            selectElement.appendChild(optionElement);
+        });
+    }
+
+    function fetchNFData() {
+        const nfInput = document.getElementById('nfInput').value.trim();
+        const nfData = nfDatabase[nfInput];
+        const tableBody = document.getElementById('nfTableBody');
+        tableBody.innerHTML = '';
+
+        if (nfData) {
+            document.getElementById('dataInput').value = nfData.data;
+            document.getElementById('produtoInput').value = nfData.produto;
+            document.getElementById('observacaoInput').value = nfData.observacao;
+            document.getElementById('deSelect').value = nfData.de;
+            document.getElementById('paraSelect').value = nfData.para;
+            document.getElementById('recebidoInput').checked = nfData.recebido;
+
+            const row = `
+                <tr>
+                    <td>${nfData.data}</td>
+                    <td>${nfInput}</td>
+                    <td>${nfData.produto}</td>
+                    <td>${nfData.observacao}</td>
+                    <td>${nfData.de}</td>
+                    <td>${nfData.para}</td>
+                    <td>${nfData.recebido ? 'Recebido' : 'Não Recebido'}</td>
+                </tr>
+            `;
+            tableBody.innerHTML = row;
+        } else {
+            alert('Nota Fiscal não encontrada!');
+        }
+    }
+
+    function saveNFData() {
+        const nfInput = document.getElementById('nfInput').value.trim();
+        const data = document.getElementById('dataInput').value.trim();
+        const produto = document.getElementById('produtoInput').value.trim();
+        const observacao = document.getElementById('observacaoInput').value.trim();
+        const de = document.getElementById('deSelect').value;
+        const para = document.getElementById('paraSelect').value;
+        const recebido = document.getElementById('recebidoInput').checked;
+
+        if (nfDatabase[nfInput]) {
+            nfDatabase[nfInput] = { data, produto, observacao, de, para, recebido };
+        } else {
+            nfDatabase[nfInput] = { data, produto, observacao, de, para, recebido };
+        }
+
+        alert('Dados salvos na base de dados!');
+        exportToExcel();
+    }
+
+    function showAllNFs() {
+        const tableBody = document.getElementById('nfTableBody');
+        tableBody.innerHTML = '';
+
+        Object.keys(nfDatabase).forEach(nf => {
+            const info = nfDatabase[nf];
+            const row = `
+                <tr>
+                    <td>${info.data}</td>
+                    <td>${nf}</td>
+                    <td>${info.produto}</td>
+                    <td>${info.observacao}</td>
+                    <td>${info.de}</td>
+                    <td>${info.para}</td>
+                    <td>${info.recebido ? 'Recebido' : 'Não Recebido'}</td>
+                </tr>
+            `;
+            tableBody.innerHTML += row;
+        });
+    }
+
+    function exportToExcel() {
+        const wb = XLSX.utils.book_new();
+        const data = [];
+        data.push(['Data', 'NF', 'Produto', 'Observação', 'De', 'Para', 'Status']);
+
+        Object.keys(nfDatabase).forEach(nf => {
+            const info = nfDatabase[nf];
+            data.push([
+                info.data,
+                nf,
+                info.produto,
+                info.observacao,
+                info.de,
+                info.para,
+                info.recebido ? 'Recebido' : 'Não Recebido'
+            ]);
+        });
+
+        const ws = XLSX.utils.aoa_to_sheet(data);
+        XLSX.utils.book_append_sheet(wb, ws, 'Notas Fiscais');
+        XLSX.writeFile(wb, 'Notas_Fiscais.xlsx');
+    }
+</script>
