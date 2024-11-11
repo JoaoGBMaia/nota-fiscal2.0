@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Registro de Nota Fiscal</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            padding: 10px;
+            background-color: #f5f5f5;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+
+        th {
+            background-color: #3498db;
+            color: white;
+        }
+
+        tr:nth-child(even) {
+            background-color: #f2f2f2;
+        }
+
+        .input-fields {
+            margin-top: 20px;
+        }
+
+        .input-fields input {
+            margin: 5px 0;
+            padding: 8px;
+            width: calc(50% - 12px);
+        }
+
+        .input-fields button {
+            padding: 8px 12px;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Registro de Nota Fiscal</h1>
+
+    <label for="fileUpload">Carregar Planilha Excel:</label>
+    <input type="file" id="fileUpload" accept=".xlsx, .xls" />
+    <button onclick="handleFileUpload()">Carregar</button>
+
+    <br><br>
+
+    <label for="nfInput">Número da Nota Fiscal:</label>
+    <input type="text" id="nfInput" placeholder="Digite o número da NF">
+    <button onclick="fetchNFData()">Buscar</button>
+    <button onclick="showAllNFs()">Mostrar Todas</button>
+
+    <div class="input-fields">
+        <h2>Preencher ou Editar Dados da Nota Fiscal</h2>
+        <input type="text" id="dataInput" placeholder="Data">
+        <input type="text" id="produtoInput" placeholder="Produto">
+        <input type="text" id="observacaoInput" placeholder="Observação">
+        <input type="text" id="deInput" placeholder="De">
+        <input type="text" id="paraInput" placeholder="Para">
+        <label>
+            <input type="checkbox" id="recebidoInput"> Recebido
+        </label>
+        <button onclick="saveNFData()">Salvar Dados</button>
+    </div>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Data</th>
+                <th>NF</th>
+                <th>Produto</th>
+                <th>Observação</th>
+                <th>De</th>
+                <th>Para</th>
+                <th>Status</th>
+                
+            </tr>
+        </thead>
+        <tbody id="nfTableBody">
+            <!-- Os dados serão preenchidos aqui -->
+        </tbody>
+    </table>
+
+    <script>
+        let nfDatabase = {}; // Objeto para armazenar as notas fiscais
+        let workbook; // Para armazenar a referência do workbook
+
+        function handleFileUpload() {
+            const fileInput = document.getElementById('fileUpload');
+            const file = fileInput.files[0];
+
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const data = new Uint8Array(e.target.result);
+                    workbook = XLSX.read(data, { type: 'array' });
+                    const firstSheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[firstSheetName];
+                    const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+                    processExcelData(jsonData);
+                };
+                reader.readAsArrayBuffer(file);
+            } else {
+                alert('Por favor, selecione um arquivo Excel.');
+            }
+        }
+
+        function processExcelData(data) {
+            if (!data || data.length === 0) return;
+
+            // Supondo que a primeira linha seja o cabeçalho
+            const headers = data[0];
+            data.slice(1).forEach(row => {
+                const nfNumber = row[1]; // A coluna da NF é a segunda (índice 1)
+                nfDatabase[nfNumber] = {
+                    data: row[0], // A data é a primeira coluna
+                    produto: row[2], // O produto é a terceira coluna
+                    observacao: row[3], // A observação é a quarta coluna
+                    de: row[4], // De é a quinta coluna
+                    para: row[5], // Para é a sexta coluna
+                    recebido: row[6] === 'Recebido' // A sétima coluna armazena o status
+                };
+            });
+
+            alert('Dados carregados com sucesso!');
+        }
+
+        function fetchNFData() {
+            const nfInput = document.getElementById('nfInput').value.trim();
+            const nfData = nfDatabase[nfInput];
+
+            const tableBody = document.getElementById('nfTableBody');
+            tableBody.innerHTML = ''; // Limpa a tabela antes de adicionar novos dados
+
+            if (nfData) {
+                // Preencher os campos de entrada com os dados da NF encontrada
+                document.getElementById('dataInput').value = nfData.data;
+                document.getElementById('produtoInput').value = nfData.produto;
+                document.getElementById('observacaoInput').value = nfData.observacao;
+                document.getElementById('deInput').value = nfData.de;
+                document.getElementById('paraInput').value = nfData.para;
+                document.getElementById('recebidoInput').checked = nfData.recebido; // Atualiza o status de recebido
+
+                const row = `
+                    <tr>
+                        <td>${nfData.data}</td>
+                        <td>${nfInput}</td>
+                        <td>${nfData.produto}</td>
+                        <td>${nfData.observacao}</td>
+                        <td>${nfData.de}</td>
+                        <td>${nfData.para}</td>
+                        <td>${nfData.recebido ? 'Recebido' : 'Não Recebido'}</td>
+                    </tr>
+                `;
+                tableBody.innerHTML = row; // Adiciona a nova linha à tabela
+            } else {
+                alert('Nota Fiscal não encontrada!'); // Mensagem de erro se a NF não for encontrada
+            }
+        }
+
+        function saveNFData() {
+            const nfInput = document.getElementById('nfInput').value.trim();
+            const data = document.getElementById('dataInput').value.trim();
+            const produto = document.getElementById('produtoInput').value.trim();
+            const observacao = document.getElementById('observacaoInput').value.trim();
+            const de = document.getElementById('deInput').value.trim();
+            const para = document.getElementById('paraInput').value.trim();
+            const recebido = document.getElementById('recebidoInput').checked; // Verifica se está marcado
+
+            if (nfDatabase[nfInput]) {
+                // Atualiza os dados da NF existente
+                nfDatabase[nfInput] = { data, produto, observacao, de, para, recebido };
+            } else {
+                // Adiciona uma nova NF se não existir
+                nfDatabase[nfInput] = { data, produto, observacao, de, para, recebido };
+            }
+
+            alert('Dados salvos na base de dados!');
+
+            // Chama a função para exportar os dados atualizados
+            exportToExcel();
+        }
+
+        function showAllNFs() {
+            const tableBody = document.getElementById('nfTableBody');
+            tableBody.innerHTML = ''; // Limpa a tabela antes de mostrar todos os dados
+
+            Object.keys(nfDatabase).forEach(nf => {
+                const info = nfDatabase[nf];
+                const row = `
+                    <tr>
+                        <td>${info.data}</td>
+                        <td>${nf}</td>
+                        <td>${info.produto}</td>
+                        <td>${info.observacao}</td>
+                        <td>${info.de}</td>
+                        <td>${info.para}</td>
+                        <td>${info.recebido ? 'Recebido' : 'Não Recebido'}</td>
+                    </tr>
+                `;
+                tableBody.innerHTML += row; // Adiciona cada linha à tabela
+            });
+        }
+
+        function exportToExcel() {
+            const wb = XLSX.utils.book_new();
+            const data = [];
+            data.push(['Data', 'NF', 'Produto', 'Observação', 'De', 'Para', 'Status']); // Cabeçalho da tabela
+
+            Object.keys(nfDatabase).forEach(nf => {
+                const info = nfDatabase[nf];
+                data.push([
+                    info.data,
+                    nf,
+                    info.produto,
+                    info.observacao,
+                    info.de,
+                    info.para,
+                    info.recebido ? 'Recebido' : 'Não Recebido' // Status de recebido
+                ]);
+            });
+
+            const ws = XLSX.utils.aoa_to_sheet(data);
+            XLSX.utils.book_append_sheet(wb, ws, 'Notas Fiscais');
+            XLSX.writeFile(wb, 'Notas_Fiscais.xlsx'); // Gera o arquivo Excel para download
+        }
+    </script>
+</body>
+</html>
